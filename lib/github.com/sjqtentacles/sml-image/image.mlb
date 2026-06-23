@@ -1,0 +1,10 @@
+(* MLB for the sml-image library: vendored sml-inflate and sml-color cores plus
+ * the image sources. Consumers reference this file.
+ *
+ * The dependency .mlb files are brought in WITHOUT a `local` wrapper so that
+ * consumers can `open Inflate`/`Color` alongside Image if desired. *)
+$(SML_LIB)/basis/basis.mlb
+../lib/github.com/sjqtentacles/sml-inflate/inflate.mlb
+../lib/github.com/sjqtentacles/sml-color/color.mlb
+image.sig
+image.sml
