@@ -2,31 +2,61 @@
 
 [![CI](https://github.com/sjqtentacles/sml-jpeg/actions/workflows/ci.yml/badge.svg)](https://github.com/sjqtentacles/sml-jpeg/actions/workflows/ci.yml)
 
-JPEG **header** parsing for Standard ML: detect the JPEG SOI marker and read
-image geometry (width/height) from the Start-of-Frame segment. This is a
-header/metadata reader — it does **not** decode pixel data.
+JPEG **header / metadata** parsing for Standard ML by walking the marker
+segments: detect the SOI, read image geometry and frame info, enumerate
+segments, decode JFIF density, extract comments, and read EXIF orientation. This
+is a metadata reader — it does **not** decode pixel data.
 
-## What it does
-
-- `isJpeg v` — true when the byte vector begins with the JPEG SOI marker
-  (`FF D8`).
-- `decodeBaseline v` — scans the marker segments, skipping length-prefixed
-  segments, until it reaches a Start-of-Frame marker (`SOF0`/`SOF1`/`SOF2`/…)
-  and returns the `(width, height)` encoded there.
+## API
 
 ```sml
-Jpeg.isJpeg bytes                 (* true if FF D8 ... *)
-val (w, h) = Jpeg.decodeBaseline bytes
+val isJpeg         : Word8Vector.vector -> bool
+val decodeBaseline : Word8Vector.vector -> int * int          (* raises on failure *)
+val dimensions     : Word8Vector.vector -> (int * int) option
+
+val frameInfo : Word8Vector.vector ->
+  { width:int, height:int, precision:int, components:int
+  , sofType:int, progressive:bool } option
+
+type segment = { marker : int, offset : int, length : int }
+val segments   : Word8Vector.vector -> segment list           (* up to SOS *)
+val markerName : int -> string                                 (* 0xD8 -> "SOI" *)
+
+val jfif    : Word8Vector.vector ->
+  { version:int*int, units:int, xDensity:int, yDensity:int } option
+val comment : Word8Vector.vector -> string option              (* first COM *)
+val exifOrientation : Word8Vector.vector -> int option         (* 1..8, best-effort *)
+```
+
+## Examples
+
+```sml
+val (w, h) = Jpeg.decodeBaseline data        (* (320, 240) *)
+val dim    = Jpeg.dimensions data            (* SOME (320, 240), NONE if invalid *)
+
+val fi = valOf (Jpeg.frameInfo data)
+(* { width=320, height=240, precision=8, components=3, sofType=0xC0, progressive=false } *)
+
+(* enumerate the marker structure *)
+List.map (fn s => Jpeg.markerName (#marker s)) (Jpeg.segments data)
+(* ["SOI","APP0","SOF0","SOS"] *)
+
+val Jpeg.jfif data            (* SOME { version=(1,1), units=1, xDensity=72, yDensity=72 } *)
+val Jpeg.comment data         (* SOME "created by ..." | NONE *)
+val Jpeg.exifOrientation data (* SOME 6 | NONE *)
 ```
 
 ## Scope and limitations
 
-- **No entropy/pixel decoding.** Huffman tables, quantization tables, DCT and
-  the scan data are not interpreted. Only the frame header geometry is read.
-- Reads dimensions from the first SOF marker encountered (baseline or
-  progressive). Arithmetic-coded and hierarchical variants are not special-cased.
-- Input that is not a JPEG, or a JPEG with no SOF segment, yields no dimensions
-  (the scan reaches end-of-input).
+- **No entropy/pixel decoding.** Huffman/quantization tables, DCT, and scan data
+  are not interpreted — only header structure and metadata.
+- `frameInfo` reads the first SOF marker; `progressive` is true for SOF2.
+- `segments` stops at SOS (the entropy-coded scan data follows and is not
+  segment-structured).
+- `exifOrientation` is best-effort: it parses the APP1/Exif TIFF IFD0 for tag
+  0x0112 (handles both `MM`/`II` byte orders) and returns `NONE` on anything
+  unexpected. It does not chase sub-IFDs or MakerNotes.
+- Input that is not a JPEG, or has no SOF, yields `NONE`/raises as documented.
 
 ## Installing with smlpkg
 
@@ -57,10 +87,10 @@ sml.pkg
 Makefile
 lib/github.com/sjqtentacles/sml-jpeg/
   jpeg.sig     JPEG signature
-  jpeg.sml     SOI detection + SOF geometry parser
+  jpeg.sml     marker walk: SOI/SOF/frameInfo/segments/JFIF/COM/EXIF
   jpeg.mlb
 test/
-  test.sml     SOI detection, SOF0/SOF2 geometry, error paths
+  test.sml     dimensions, frameInfo SOF0/SOF2, segments, JFIF, comment, EXIF, errors
 ```
 
 ## License
