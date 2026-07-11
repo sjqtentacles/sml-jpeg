@@ -46,6 +46,32 @@ val Jpeg.comment data         (* SOME "created by ..." | NONE *)
 val Jpeg.exifOrientation data (* SOME 6 | NONE *)
 ```
 
+## Example
+
+`make example` builds and runs [`examples/demo.sml`](examples/demo.sml), which
+builds a small synthetic in-memory JPEG (SOI, JFIF APP0, a comment, a
+baseline SOF0, SOS, EOI) and walks its markers, dimensions, frame info, JFIF
+density, and comment (output is byte-identical under MLton and Poly/ML):
+
+```
+isJpeg              = true
+decodeBaseline      = 64 x 48
+frameInfo           = precision 8, components 3, sofType 0xC0, progressive false
+jfif                = version 1.1, units 1, 72x72 dpi
+comment             = demo
+
+segments up to SOS:
+  SOI  offset=0  length=0
+  APP0  offset=2  length=16
+  COM  offset=20  length=6
+  SOF0  offset=28  length=17
+  SOS  offset=47  length=8
+
+non-JPEG input:
+  isJpeg              = false
+  dimensions          = NONE
+```
+
 ## Scope and limitations
 
 - **No entropy/pixel decoding.** Huffman/quantization tables, DCT, and scan data
@@ -77,6 +103,7 @@ lib/github.com/sjqtentacles/sml-jpeg/jpeg.mlb
 make test        # MLton
 make test-poly   # Poly/ML
 make all-tests   # both
+make example     # build + run the demo
 make clean
 ```
 
